@@ -5,19 +5,19 @@ interface ResourceState {
   balls: Record<BallType, number>
   ownedCards: PokemonCard[]
   useBalls: (cost: Partial<Record<BallType, number>>) => boolean
-  addBalls: (ballsToAdd: Partial<Record<BallType, number>>) => void
+  addBalls: (ballsToAdd: Partial<Record<BallType, number>>) => boolean
   addMasterBall: () => void
   addCard: (card: PokemonCard) => void
 }
 
 export const useResourceState = create<ResourceState>((set, get) => ({
   balls: {
-    pokeball: 5,
-    superball: 5,
-    hyperball: 5,
-    healball: 5,
-    netball: 5,
-    masterball: 1,
+    pokeball: 0,
+    superball: 0,
+    hyperball: 0,
+    healball: 0,
+    netball: 0,
+    masterball: 0,
   },
   ownedCards: [],
 
@@ -37,14 +37,29 @@ export const useResourceState = create<ResourceState>((set, get) => ({
   },
 
   addBalls: (ballsToAdd) => {
-    set((state) => {
-      const updated = { ...state.balls }
-      for (const type in ballsToAdd) {
-        const key = type as BallType
-        updated[key] = (updated[key] || 0) + (ballsToAdd[key] || 0)
-      }
-      return { balls: updated }
-    })
+    const state = get()
+    const updated = { ...state.balls }
+    const currentTotal =
+      Object.values(updated).reduce((sum, v) => sum + (v || 0), 0)
+    const addTotal =
+      Object.values(ballsToAdd).reduce((sum, v) => sum + (v || 0), 0)
+    let allowedToAdd = Math.max(0, 10 - currentTotal)
+    if (addTotal > allowedToAdd) {
+      // 10개 초과 시 경고 및 실패 반환
+      alert('볼은 최대 10개까지만 가질 수 있습니다!')
+      return false
+    }
+    const result = { ...updated }
+    for (const type in ballsToAdd) {
+      const key = type as BallType
+      const wantToAdd = ballsToAdd[key] || 0
+      const addCount = Math.min(wantToAdd, allowedToAdd)
+      result[key] = (result[key] || 0) + addCount
+      allowedToAdd -= addCount
+      if (allowedToAdd <= 0) break
+    }
+    set({ balls: result })
+    return true
   },
 
   addMasterBall: () => {

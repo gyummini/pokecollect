@@ -20,8 +20,13 @@ const PlayerPanel = () => {
       ) : (
         <ul className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-sm">
           {ownedCards.map((card) => (
-            <li key={card.id} className="border px-2 py-1 rounded">
-              {card.name} ({card.rarity})
+            <li key={card.id} className="border px-2 py-1 rounded flex flex-col">
+              <span>
+                {card.name} ({card.rarity})
+              </span>
+              <span className="text-xs text-blue-600">
+                🎁 보너스: {card.bonus} +{card.bonusCount}
+              </span>
             </li>
           ))}
         </ul>
