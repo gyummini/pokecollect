@@ -5,10 +5,17 @@ interface GameState {
   round: number
   maxRounds: number
   isChoosingAction: boolean
+  resetCount: number
+  maxReset: number
+  isGameOver: boolean
+  finalCollection: any[]
   decreaseActionPoints: () => void
   nextRound: () => void
   resetGame: () => void
   setChoosingAction: (value: boolean) => void
+  increaseResetCount: () => void
+  setGameOver: (value: boolean) => void
+  setFinalCollection: (cards: any[]) => void
 }
 
 export const useGameState = create<GameState>((set) => ({
@@ -16,6 +23,10 @@ export const useGameState = create<GameState>((set) => ({
   round: 1,
   maxRounds: 3,
   isChoosingAction: false,
+  resetCount: 0,
+  maxReset: 2,
+  isGameOver: false,
+  finalCollection: [],
 
   decreaseActionPoints: () =>
     set((state) => ({
@@ -35,10 +46,28 @@ export const useGameState = create<GameState>((set) => ({
       round: 1,
       maxRounds: 3,
       isChoosingAction: false,
+      resetCount: 0,
+      isGameOver: false,
+      finalCollection: [],
     })),
 
   setChoosingAction: (value) =>
     set(() => ({
       isChoosingAction: value,
+    })),
+
+  increaseResetCount: () =>
+    set((state) => ({
+      resetCount: Math.min(state.resetCount + 1, state.maxReset),
+    })),
+
+  setGameOver: (value: boolean) =>
+    set(() => ({
+      isGameOver: value,
+    })),
+
+  setFinalCollection: (cards: any[]) =>
+    set(() => ({
+      finalCollection: cards,
     })),
 }))

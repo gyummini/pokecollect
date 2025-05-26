@@ -3,29 +3,92 @@ import { useResourceState } from '../state/resourceState'
 import { useGameState } from '../state/gameState'
 import type { BallType } from '../data/cards'
 
-const ballTypes: BallType[] = ['pokeball', 'superball', 'hyperball', 'healball', 'netball']
+const ballTypes: BallType[] = [
+  'pokeball',
+  'superball',
+  'hyperball',
+  'healball',
+  'netball',
+]
 
 const ActionSelector = () => {
-  const { balls, addBalls } = useResourceState()
+  /* zustand hooks */
+  const { balls, addBallsRaw } = useResourceState()
   const { actionPoints, decreaseActionPoints, setChoosingAction } = useGameState()
 
+  /* 행동 선택 상태 */
   const [actionType, setActionType] = useState<'same' | 'different'>('same')
   const [diffBalls, setDiffBalls] = useState<BallType[]>([])
 
-  // 볼 버리기 상태
+  /* 버리기(Discard) 모드 상태 */
   const [discardMode, setDiscardMode] = useState(false)
   const [discardCount, setDiscardCount] = useState(0)
-  const [discardBalls, setDiscardBalls] = useState<Partial<Record<BallType, number>>>({})
+  const [discardBalls, setDiscardBalls] =
+    useState<Partial<Record<BallType, number>>>({})
 
-  // 예약 관련 상태
-  const [reservedPokemon, setReservedPokemon] = useState<string | null>(null)
-  const [reserveInput, setReserveInput] = useState('')
+  /* 현재 볼 총합 계산 */
+  const getTotal = (obj: Partial<Record<BallType, number>>) =>
+    Object.values(obj).reduce((s, n) => s + (n || 0), 0)
 
-  // 볼 총합 계산
-  const getTotalBalls = (customBalls?: Record<string, number>) =>
-    Object.values(customBalls ?? balls).reduce((sum, v) => sum + (v || 0), 0)
+  /* ───────────────────────────────────
+       공통 로직 : 볼 획득 + 초과 처리
+  ────────────────────────────────────*/
+  const handleAddBallsWithDiscard = (gain: Partial<Record<BallType, number>>) => {
+    /* 1) gain 을 현재 balls 에 합쳐 스냅샷 생성 */
+    const merged: Partial<Record<BallType, number>> = { ...balls }
+    for (const t in gain) {
+      const k = t as BallType
+      merged[k] = (merged[k] || 0) + (gain[k] || 0)
+    }
+    const nextTotal = getTotal(merged)
 
-  // 볼 버리기 UI에서 선택
+    /* 2) 제한 없이 모든 볼 추가 */
+    addBallsRaw(gain)
+
+    /* 3) 초과 여부 판단 */
+    if (nextTotal > 10) {
+      setDiscardMode(true)
+      setDiscardCount(nextTotal - 10)
+      setDiscardBalls({})
+      alert(`볼은 최대 10개까지 보유 가능합니다. ${nextTotal - 10}개를 버려주세요.`)
+    } else {
+      setChoosingAction(false)
+    }
+  }
+
+  /* 같은 볼 2개 */
+  const handleSameBall = (ball: BallType) => {
+    if (actionPoints < 3) {
+      alert('행동력이 부족합니다.')
+      return
+    }
+    handleAddBallsWithDiscard({ [ball]: 2 })
+    decreaseActionPoints()
+  }
+
+  /* 서로 다른 볼 3개 */
+  const handleDiffBall = (ball: BallType) => {
+    if (diffBalls.includes(ball)) return
+    const next = [...diffBalls, ball]
+    setDiffBalls(next)
+
+    if (next.length === 3) {
+      if (actionPoints < 3) {
+        alert('행동력이 부족합니다.')
+        setDiffBalls([])
+        return
+      }
+      const gain: Partial<Record<BallType, number>> = {}
+      next.forEach((b) => (gain[b] = 1))
+      handleAddBallsWithDiscard(gain)
+      decreaseActionPoints()
+      setDiffBalls([])
+    }
+  }
+
+  const handleResetDiff = () => setDiffBalls([])
+
+  /* 버리기 선택 */
   const handleSelectDiscard = (type: BallType) => {
     if ((discardBalls[type] || 0) < (balls[type] || 0)) {
       setDiscardBalls({
@@ -35,95 +98,43 @@ const ActionSelector = () => {
     }
   }
 
-  // 볼 버리기 완료
+  const discardedSum = () =>
+    Object.values(discardBalls).reduce((s, n) => s + (n || 0), 0)
+
   const handleConfirmDiscard = () => {
-    // 실제 볼 차감
-    const updated: Partial<Record<BallType, number>> = {}
-    for (const type in discardBalls) {
-      updated[type as BallType] = -(discardBalls[type as BallType] || 0)
+    if (discardedSum() !== discardCount) return
+    /* 음수로 만들어 차감 */
+    const negative: Partial<Record<BallType, number>> = {}
+    for (const t in discardBalls) {
+      negative[t as BallType] = -(discardBalls[t as BallType] || 0)
     }
-    addBalls(updated)
+    addBallsRaw(negative)
+    /* 모드 종료 */
     setDiscardMode(false)
     setDiscardBalls({})
     setDiscardCount(0)
     setChoosingAction(false)
   }
 
-  // 볼을 가져오는 공통 처리 (볼을 먼저 모두 받고, 10개 초과 시 버리기)
-  const handleAddBallsWithDiscard = (ballsToAdd: Partial<Record<BallType, number>>) => {
-    // 1. 볼을 일단 모두 addBalls로 추가
-    addBalls(ballsToAdd)
-    // 2. zustand의 상태 갱신이 비동기이므로, setTimeout으로 최신 balls 값을 읽음
-    setTimeout(() => {
-      const total = getTotalBalls()
-      if (total > 10) {
-        setDiscardMode(true)
-        setDiscardCount(total - 10)
-        setDiscardBalls({})
-        alert(`볼은 최대 10개까지만 가질 수 있습니다. ${total - 10}개를 버려주세요.`)
-      } else {
-        setChoosingAction(false)
-      }
-    }, 0)
-  }
-
-  // 같은 볼 2개 버튼 클릭
-  const handleSameBall = (ball: BallType) => {
-    if (actionPoints < 3 || reservedPokemon) {
-      alert(reservedPokemon ? '이미 예약한 포켓몬이 있습니다.' : '행동력이 부족합니다.')
-      return
-    }
-    handleAddBallsWithDiscard({ [ball]: 2 })
-    decreaseActionPoints()
-  }
-
-  // 서로 다른 볼 3개 버튼 클릭
-  const handleDiffBall = (ball: BallType) => {
-    if (reservedPokemon) return
-    if (diffBalls.includes(ball)) return
-    const next = [...diffBalls, ball]
-    setDiffBalls(next)
-    if (next.length === 3) {
-      if (actionPoints < 3) {
-        alert('행동력이 부족합니다.')
-        setDiffBalls([])
-        return
-      }
-      const gain: Partial<Record<BallType, number>> = {}
-      next.forEach((b) => {
-        gain[b] = (gain[b] || 0) + 1
-      })
-      handleAddBallsWithDiscard(gain)
-      decreaseActionPoints()
-      setTimeout(() => setDiffBalls([]), 0)
-    }
-  }
-
-  // 서로 다른 볼 선택 취소
-  const handleResetDiff = () => setDiffBalls([])
-
-  // 볼 버리기 UI에서 선택한 볼 총합
-  const getDiscardedTotal = () =>
-    Object.values(discardBalls).reduce((sum, v) => sum + (v || 0), 0)
-
+  /* ───────────── 렌더 ───────────── */
   return (
     <div className="p-4 bg-white shadow mb-4 border">
       <h2 className="text-lg font-bold mb-2">⚙️ 어떤 행동을 할까요?</h2>
 
-      {/* 볼 버리기 모드 */}
       {discardMode ? (
+        /* ── 버리기 모드 ── */
         <div className="p-4 bg-yellow-50 border border-yellow-400 rounded mb-2">
-          <div className="mb-2 font-bold text-yellow-700">
+          <p className="mb-2 font-bold text-yellow-700">
             볼이 10개를 초과했습니다. {discardCount}개를 버려주세요.
-          </div>
-          <div className="flex gap-2 flex-wrap mb-2">
+          </p>
+          <div className="flex flex-wrap gap-2 mb-2">
             {ballTypes.concat('masterball' as BallType).map((type) => (
               <button
                 key={type}
-                className="bg-red-400 hover:bg-red-600 text-white px-3 py-2 rounded"
+                className="bg-red-400 hover:bg-red-600 text-white px-3 py-1 rounded text-xs"
                 disabled={
                   (balls[type] || 0) - (discardBalls[type] || 0) <= 0 ||
-                  getDiscardedTotal() >= discardCount
+                  discardedSum() >= discardCount
                 }
                 onClick={() => handleSelectDiscard(type)}
               >
@@ -131,35 +142,20 @@ const ActionSelector = () => {
               </button>
             ))}
           </div>
-          <div className="mb-2 text-sm">
-            선택한 볼: {getDiscardedTotal()} / {discardCount}
-          </div>
+          <p className="text-sm mb-2">
+            선택: {discardedSum()} / {discardCount}
+          </p>
           <button
             className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded"
-            disabled={getDiscardedTotal() !== discardCount}
+            disabled={discardedSum() !== discardCount}
             onClick={handleConfirmDiscard}
           >
             버리기 확정
           </button>
         </div>
       ) : (
+        /* ── 일반 모드 ── */
         <>
-          {/* 예약 상태 표시 */}
-          {reservedPokemon && (
-            <div className="mb-2 p-2 bg-yellow-100 border border-yellow-400 rounded text-sm flex items-center justify-between">
-              <span>
-                예약된 포켓몬: <b>{reservedPokemon}</b>
-              </span>
-              <button
-                className="ml-2 text-xs text-red-500 underline"
-                onClick={() => setReservedPokemon(null)}
-                type="button"
-              >
-                예약 취소
-              </button>
-            </div>
-          )}
-
           <div className="flex gap-4 mb-4">
             <label>
               <input
@@ -168,7 +164,6 @@ const ActionSelector = () => {
                 value="same"
                 checked={actionType === 'same'}
                 onChange={() => setActionType('same')}
-                disabled={!!reservedPokemon}
               />{' '}
               같은 볼 2개
             </label>
@@ -179,53 +174,61 @@ const ActionSelector = () => {
                 value="different"
                 checked={actionType === 'different'}
                 onChange={() => setActionType('different')}
-                disabled={!!reservedPokemon}
               />{' '}
               서로 다른 볼 3개
             </label>
           </div>
 
           {actionType === 'same' ? (
-            <div className="flex gap-2 flex-wrap">
+            <div className="flex flex-wrap gap-2">
               {ballTypes.map((b) => (
                 <button
                   key={b}
-                  className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-2 rounded"
+                  className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-sm"
                   onClick={() => handleSameBall(b)}
-                  disabled={actionPoints < 3 || !!reservedPokemon}
+                  disabled={actionPoints < 3}
                 >
-                  {b} 2개 받기
+                  {b} ×2
                 </button>
               ))}
             </div>
           ) : (
             <div>
-              <div className="flex gap-2 flex-wrap mb-2">
+              <div className="flex flex-wrap gap-2 mb-2">
                 {ballTypes.map((b) => (
                   <button
                     key={b}
-                    className={`px-3 py-2 rounded border ${diffBalls.includes(b) ? 'bg-gray-400 text-white' : 'bg-green-500 hover:bg-green-600 text-white'}`}
+                    className={`px-3 py-1 rounded text-sm border ${
+                      diffBalls.includes(b)
+                        ? 'bg-gray-400 text-white'
+                        : 'bg-green-500 hover:bg-green-600 text-white'
+                    }`}
                     onClick={() => handleDiffBall(b)}
-                    disabled={diffBalls.includes(b) || diffBalls.length >= 3 || actionPoints < 3 || !!reservedPokemon}
+                    disabled={
+                      diffBalls.includes(b) ||
+                      diffBalls.length >= 3 ||
+                      actionPoints < 3
+                    }
                   >
                     {b}
                   </button>
                 ))}
               </div>
-              <div className="mb-2">
-                <span className="text-sm">선택: {diffBalls.join(', ') || '없음'}</span>
+              <p className="text-sm mb-2">
+                선택: {diffBalls.join(', ') || '없음'}
                 {diffBalls.length > 0 && (
                   <button
                     className="ml-3 text-xs text-red-500 underline"
                     onClick={handleResetDiff}
                     type="button"
-                    disabled={!!reservedPokemon}
                   >
                     선택 취소
                   </button>
                 )}
-              </div>
-              <div className="text-xs text-gray-500">서로 다른 볼 3개를 차례로 선택하세요.</div>
+              </p>
+              <p className="text-xs text-gray-500">
+                서로 다른 볼 3개를 차례로 선택하세요.
+              </p>
             </div>
           )}
         </>
