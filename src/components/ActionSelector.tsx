@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { useResourceState } from '../state/resourceState'
 import { useGameState } from '../state/gameState'
+import { ballImagePath } from '../utils/constants'
+import { handleSelectDiscard, discardedSum } from '../utils/ballUtils'
 import type { BallType } from '../data/cards'
 
 const ballTypes: BallType[] = [
@@ -89,7 +91,7 @@ const ActionSelector = () => {
   const handleResetDiff = () => setDiffBalls([])
 
   /* 버리기 선택 */
-  const handleSelectDiscard = (type: BallType) => {
+  const handleSelect = (type: BallType) => {
     if ((discardBalls[type] || 0) < (balls[type] || 0)) {
       setDiscardBalls({
         ...discardBalls,
@@ -98,11 +100,8 @@ const ActionSelector = () => {
     }
   }
 
-  const discardedSum = () =>
-    Object.values(discardBalls).reduce((s, n) => s + (n || 0), 0)
-
   const handleConfirmDiscard = () => {
-    if (discardedSum() !== discardCount) return
+    if (discardedSum(discardBalls) !== discardCount) return
     /* 음수로 만들어 차감 */
     const negative: Partial<Record<BallType, number>> = {}
     for (const t in discardBalls) {
@@ -119,7 +118,7 @@ const ActionSelector = () => {
   /* ───────────── 렌더 ───────────── */
   return (
     <div className="p-4 bg-white shadow mb-4 border">
-      <h2 className="text-lg font-bold mb-2">⚙️ 어떤 행동을 할까요?</h2>
+      <h2 className="text-lg font-bold mb-2">⚙️ 어떤 볼을 가져올까요?</h2>
 
       {discardMode ? (
         /* ── 버리기 모드 ── */
@@ -134,20 +133,20 @@ const ActionSelector = () => {
                 className="bg-red-400 hover:bg-red-600 text-white px-3 py-1 rounded text-xs"
                 disabled={
                   (balls[type] || 0) - (discardBalls[type] || 0) <= 0 ||
-                  discardedSum() >= discardCount
+                  discardedSum(discardBalls) >= discardCount
                 }
-                onClick={() => handleSelectDiscard(type)}
+                onClick={() => handleSelectDiscard(type, balls, discardBalls, setDiscardBalls)}
               >
                 {type} -{discardBalls[type] || 0} / {balls[type] || 0}
               </button>
             ))}
           </div>
           <p className="text-sm mb-2">
-            선택: {discardedSum()} / {discardCount}
+            선택: {discardedSum(discardBalls)} / {discardCount}
           </p>
           <button
             className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded"
-            disabled={discardedSum() !== discardCount}
+            disabled={discardedSum(discardBalls) !== discardCount}
             onClick={handleConfirmDiscard}
           >
             버리기 확정
@@ -180,25 +179,41 @@ const ActionSelector = () => {
           </div>
 
           {actionType === 'same' ? (
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-1">
               {ballTypes.map((b) => (
                 <button
                   key={b}
-                  className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-sm"
+                  className="bg-blue-500 hover:bg-blue-600 text-white rounded flex items-center justify-center"
                   onClick={() => handleSameBall(b)}
                   disabled={actionPoints < 3}
+                  style={{
+                    width: 48,
+                    height: 48,
+                    padding: 0,
+                    boxShadow: '0 1px 4px #0001',
+                  }}
                 >
-                  {b} ×2
+                  <img
+                    src={ballImagePath[b]}
+                    alt={b}
+                    style={{
+                      width: 28,
+                      height: 28,
+                      objectFit: 'contain',
+                      display: 'block',
+                    }}
+                    onError={e => { (e.target as HTMLImageElement).style.display = 'none' }}
+                  />
                 </button>
               ))}
             </div>
           ) : (
             <div>
-              <div className="flex flex-wrap gap-2 mb-2">
+              <div className="flex flex-wrap gap-1 mb-2">
                 {ballTypes.map((b) => (
                   <button
                     key={b}
-                    className={`px-3 py-1 rounded text-sm border ${
+                    className={`rounded border flex items-center justify-center ${
                       diffBalls.includes(b)
                         ? 'bg-gray-400 text-white'
                         : 'bg-green-500 hover:bg-green-600 text-white'
@@ -209,8 +224,24 @@ const ActionSelector = () => {
                       diffBalls.length >= 3 ||
                       actionPoints < 3
                     }
+                    style={{
+                      width: 48,
+                      height: 48,
+                      padding: 0,
+                      boxShadow: '0 1px 4px #0001',
+                    }}
                   >
-                    {b}
+                    <img
+                      src={ballImagePath[b]}
+                      alt={b}
+                      style={{
+                        width: 28,
+                        height: 28,
+                        objectFit: 'contain',
+                        display: 'block',
+                      }}
+                      onError={e => { (e.target as HTMLImageElement).style.display = 'none' }}
+                    />
                   </button>
                 ))}
               </div>
