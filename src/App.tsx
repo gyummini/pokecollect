@@ -107,8 +107,17 @@ function App() {
           <div className="bg-white p-8 rounded shadow-lg text-center">
             <h2 className="text-2xl font-bold mb-2">게임 종료!</h2>
             <p className="mb-2">최종 점수: {calculateScore(ownedCards)}점</p>
-            <p className="mb-4">{calculateScore(ownedCards) >= 17 ? '축하합니다! 컬렉션에 등록되었습니다.' : '17점 미만으로 컬렉션 등록 실패.'}</p>
-            <button className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded" onClick={() => window.location.reload()}>다시 시작</button>
+            <p className="mb-4">
+              {calculateScore(ownedCards) >= 17
+                ? "축하합니다! 컬렉션에 등록되었습니다."
+                : "17점 미만으로 컬렉션 등록 실패."}
+            </p>
+            <button
+              className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded"
+              onClick={() => window.location.reload()}
+            >
+              다시 시작
+            </button>
           </div>
         </div>
       )}
