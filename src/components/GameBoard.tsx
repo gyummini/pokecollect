@@ -1,3 +1,4 @@
+import React from 'react'
 import { getBoardByRarity } from '../utils/gameUtils'
 import { useState } from 'react'
 import { ballImagePath, bonusBgColor, dummyCards } from '../utils/constants'
@@ -172,7 +173,6 @@ const GameBoard = () => {
   return (
     <div>
       <PlayerPanel />
-
       {/* discard 모드 UI */}
       {discardMode && (
         <div className="p-4 bg-yellow-50 border border-yellow-400 rounded mb-4">
@@ -206,7 +206,6 @@ const GameBoard = () => {
           </button>
         </div>
       )}
-
       <div className="flex justify-between items-center mb-2">
         <span className="text-sm text-gray-500">카드 교체: {resetCount} / {maxReset}</span>
         <button
@@ -218,51 +217,122 @@ const GameBoard = () => {
         </button>
       </div>
 
-      {/* 희귀도별 카드 배치 렌더링 */}
-      {Object.entries(board).map(([rarity, cards]) => (
-        <div key={rarity} className="mb-2">
-          <h3 className="font-bold mb-1 capitalize text-sm">{rarity}</h3>
-          <div className="grid grid-cols-6 sm:grid-cols-8 md:grid-cols-10 gap-0">
-            {cards.map((card) => (
-              <PokemonCardComponent
-                key={card.id}
-                card={card}
-                actionPoints={actionPoints}
-                reservedPokemon={reservedPokemon}
-                onCapture={handleCapture}
-                onReserve={handleReserve}
-                ballImagePath={ballImagePath}
-                getDiscountedCost={getDiscountedCostWithBonus}
-                bonusBgColor={bonusBgColor}
-              />
+      {/* 보드: 각 행에 특수카드(legendary, mythical, reserved) 포함 */}
+      <div className="space-y-4">
+        {/* Common + Legendary */}
+        <div>
+          <h3 className="font-bold mb-1 capitalize text-sm">common</h3>
+          <div className="flex flex-row gap-2 flex-wrap">
+            {board.common.map((card, idx) => (
+              <React.Fragment key={card.id}>
+                <div className="w-36 min-w-0">
+                  <PokemonCardComponent
+                    card={card}
+                    actionPoints={actionPoints}
+                    reservedPokemon={reservedPokemon}
+                    onCapture={handleCapture}
+                    onReserve={handleReserve}
+                    ballImagePath={ballImagePath}
+                    getDiscountedCost={getDiscountedCostWithBonus}
+                    bonusBgColor={bonusBgColor}
+                  />
+                </div>
+                {/* 4번째 뒤에 legendary */}
+                {idx === 3 && board.legendary[0] && (
+                  <div className="w-36 min-w-0" key={board.legendary[0].id}>
+                    <PokemonCardComponent
+                      card={board.legendary[0]}
+                      actionPoints={actionPoints}
+                      reservedPokemon={reservedPokemon}
+                      onCapture={handleCapture}
+                      onReserve={handleReserve}
+                      ballImagePath={ballImagePath}
+                      getDiscountedCost={getDiscountedCostWithBonus}
+                      bonusBgColor={bonusBgColor}
+                      rarityLabel="LEGENDARY"
+                    />
+                  </div>
+                )}
+              </React.Fragment>
             ))}
           </div>
         </div>
-      ))}
-
-      {/* 예약된 포켓몬 칸 */}
-      {reservedCard && (
-        <div className="mt-8 p-4 bg-yellow-50 border-2 border-yellow-400 rounded-lg max-w-md mx-auto">
-          <h2 className="text-lg font-bold mb-2 text-yellow-700">예약된 포켓몬</h2>
-          <div className="bg-white shadow rounded-lg p-4 border flex justify-center">
-            <div style={{ width: 120, minWidth: 0 }}>
-              <PokemonCardComponent
-                card={reservedCard}
-                actionPoints={actionPoints}
-                reservedPokemon={reservedPokemon}
-                onCapture={handleCapture}
-                onReserve={handleReserve}
-                ballImagePath={ballImagePath}
-                getDiscountedCost={getDiscountedCostWithBonus}
-                bonusBgColor={bonusBgColor}
-              />
-              <div className="mt-2 text-xs text-yellow-700 font-bold text-center">
-                예약 취소는 불가능합니다.
-              </div>
-            </div>
+        {/* Uncommon + Mythical */}
+        <div>
+          <h3 className="font-bold mb-1 capitalize text-sm">uncommon</h3>
+          <div className="flex flex-row gap-2 flex-wrap">
+            {board.uncommon.map((card, idx) => (
+              <React.Fragment key={card.id}>
+                <div className="w-36 min-w-0">
+                  <PokemonCardComponent
+                    card={card}
+                    actionPoints={actionPoints}
+                    reservedPokemon={reservedPokemon}
+                    onCapture={handleCapture}
+                    onReserve={handleReserve}
+                    ballImagePath={ballImagePath}
+                    getDiscountedCost={getDiscountedCostWithBonus}
+                    bonusBgColor={bonusBgColor}
+                  />
+                </div>
+                {/* 4번째 뒤에 mythical */}
+                {idx === 3 && board.mythical[0] && (
+                  <div className="w-36 min-w-0" key={board.mythical[0].id}>
+                    <PokemonCardComponent
+                      card={board.mythical[0]}
+                      actionPoints={actionPoints}
+                      reservedPokemon={reservedPokemon}
+                      onCapture={handleCapture}
+                      onReserve={handleReserve}
+                      ballImagePath={ballImagePath}
+                      getDiscountedCost={getDiscountedCostWithBonus}
+                      bonusBgColor={bonusBgColor}
+                      rarityLabel="MYTHICAL"
+                    />
+                  </div>
+                )}
+              </React.Fragment>
+            ))}
           </div>
         </div>
-      )}
+        {/* Rare + Reserved */}
+        <div>
+          <h3 className="font-bold mb-1 capitalize text-sm">rare</h3>
+          <div className="flex flex-row gap-2 flex-wrap">
+            {board.rare.map((card, idx) => (
+              <React.Fragment key={card.id}>
+                <div className="w-36 min-w-0">
+                  <PokemonCardComponent
+                    card={card}
+                    actionPoints={actionPoints}
+                    reservedPokemon={reservedPokemon}
+                    onCapture={handleCapture}
+                    onReserve={handleReserve}
+                    ballImagePath={ballImagePath}
+                    getDiscountedCost={getDiscountedCostWithBonus}
+                    bonusBgColor={bonusBgColor}
+                  />
+                </div>
+                {/* 4번째 뒤에 reservedCard */}
+                {idx === 3 && reservedCard && (
+                  <div className="w-36 min-w-0" key={reservedCard.id}>
+                    <PokemonCardComponent
+                      card={reservedCard}
+                      actionPoints={actionPoints}
+                      reservedPokemon={reservedPokemon}
+                      onCapture={handleCapture}
+                      onReserve={handleReserve}
+                      ballImagePath={ballImagePath}
+                      getDiscountedCost={getDiscountedCostWithBonus}
+                      bonusBgColor={bonusBgColor}
+                    />
+                  </div>
+                )}
+              </React.Fragment>
+            ))}
+          </div>
+        </div>
+      </div>
     </div>
   )
 }

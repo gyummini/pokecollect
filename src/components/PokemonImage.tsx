@@ -23,7 +23,7 @@ interface PokemonImageProps {
   size?: number;
 }
 
-const PokemonImage: React.FC<PokemonImageProps> = ({ name, size = 96 }) => {
+const PokemonImage: React.FC<PokemonImageProps> = ({ name, size = 200 }) => {
   const engName = koreanToEnglish[name] || name;
   const path = `/public/pokemon/${engName}.png`;
   return (
@@ -31,12 +31,15 @@ const PokemonImage: React.FC<PokemonImageProps> = ({ name, size = 96 }) => {
       src={path}
       alt={name}
       style={{
-        width: size,
-        height: size,
+        width: '100%',
+        height: 'auto',
+        maxWidth: size,
+        maxHeight: size,
         display: 'block',
         margin: '0 auto',
         objectFit: 'contain',
         borderRadius: 8,
+        imageRendering: 'auto',
       }}
       onError={e => {
         const emojiMap: Record<string, string> = {

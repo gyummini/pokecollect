@@ -18,12 +18,20 @@ export const koreanToEnglish: Record<string, string> = {
 
 export function getPokemonImage(name: string, size: number = 24) {
   const engName = koreanToEnglish[name] || name;
-  const path = `/public/pokemon/${engName}.png`;
+  const path = `/pokemon/${engName}.png`;
   return (
     <img
       src={path}
       alt={name}
-      style={{ width: size, height: size, display: 'inline', verticalAlign: 'middle', objectFit: 'cover', borderRadius: 4 }}
+      style={{
+        width: size,
+        height: size,
+        display: 'block', // block으로 하면 부모 flex 영향 최소화
+        verticalAlign: 'middle',
+        objectFit: 'contain', // cover 대신 contain으로 하면 이미지가 잘리지 않음
+        borderRadius: 4,
+        background: '#fff'
+      }}
     />
   );
 }
