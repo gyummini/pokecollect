@@ -1,126 +1,77 @@
-import React from 'react'
-import { getBoardByRarity } from '../utils/gameUtils'
-import { useState } from 'react'
-import { ballImagePath, bonusBgColor, dummyCards } from '../utils/constants'
-import type { BallType, PokemonCard } from '../data/cards'
+import React, { useState, useEffect } from 'react'
+import { getNewBoard } from '../utils/gameUtils'
+import { ballImagePath, bonusBgColor } from '../utils/constants'
+import type { BallType, PokemonCard, Rarity } from '../data/cards'
+import { pokemonDB } from '../data/pokemonDB'
 import { getBonusBalls, getDiscountedCost, handleSelectDiscard } from '../utils/ballUtils'
 import { useResourceState } from '../state/resourceState'
 import { useGameState } from '../state/gameState'
 import PokemonCardComponent from './PokemonCard'
-import PlayerPanel from './PlayerPanel'
+
+// 희귀도 순서 및 라벨 정의
+const rarityOrder: Rarity[] = ['rare', 'uncommon', 'common']
+const rarityLabels: Record<Rarity, string> = {
+  rare: '희귀',
+  uncommon: '고급',
+  common: '일반',
+  legendary: '전설',
+  mythical: '환상',
+}
 
 const GameBoard = () => {
   const { addCard, addBalls, balls, addBallsRaw, ownedCards } = useResourceState()
   const { actionPoints, decreaseActionPoints, resetCount, maxReset, increaseResetCount } = useGameState()
-  const [board, setBoard] = useState(getBoardByRarity(dummyCards))
+  const [board, setBoard] = useState(getNewBoard())
   const [reservedPokemon, setReservedPokemon] = useState<string | null>(null)
   const [discardMode, setDiscardMode] = useState(false)
   const [discardCount, setDiscardBallsCount] = useState(0)
   const [discardBalls, setDiscardBalls] = useState<Partial<Record<BallType, number>>>({})
 
-  // 카드 교체(리셋) - 예약 카드는 유지
+  // 예약된 포켓몬 카드 객체
+  const reservedCard = reservedPokemon ? pokemonDB.find((c) => c.name === reservedPokemon) ?? null : null
+
+  // 카드 교체 (리셋)
   const handleResetBoard = () => {
     if (resetCount >= maxReset) {
       alert('카드 교체는 최대 2번만 가능합니다.')
       return
     }
-    setBoard(getBoardByRarity(dummyCards))
+    setBoard(getNewBoard())
     increaseResetCount()
   }
 
-  // 예약된 포켓몬 카드 객체
-  const reservedCard = reservedPokemon
-    ? dummyCards.find((c) => c.name === reservedPokemon) ?? null
-    : null
-
-  // 요구 볼에서 보너스 할인 적용
-  // getDiscountedCost는 ballUtils에서 가져온 함수 사용
+  // 보너스 할인 적용
   const bonusBalls = getBonusBalls(ownedCards)
   const getDiscountedCostWithBonus = (cost: Partial<Record<BallType, number>>) => getDiscountedCost(cost, bonusBalls)
 
-  // 마스터볼 조커 기능: 볼로 포획 가능한지, 마스터볼 대체 사용량 반환
-  const canCaptureWithJoker = (cost: Partial<Record<BallType, number>>, balls: Record<BallType, number>) => {
-    const discountedCost = getDiscountedCost(cost, bonusBalls)
-    let masterball = balls.masterball || 0
-    let usedJoker = 0
-    let need: Partial<Record<BallType, number>> = {}
-    for (const type in discountedCost) {
-      if (type === 'masterball') continue
-      const required = discountedCost[type as BallType] || 0
-      const have = balls[type as BallType] || 0
-      if (have >= required) continue
-      const lack = required - have
-      if (masterball < lack) return { ok: false, usedJoker: 0 }
-      masterball -= lack
-      usedJoker += lack
-      need[type as BallType] = lack
-    }
-    // masterball 자체 요구는 반드시 masterball로만 충족해야 함
-    if ((discountedCost.masterball || 0) > (balls.masterball || 0) + usedJoker) {
-      return { ok: false, usedJoker: 0 }
-    }
-    return { ok: true, usedJoker }
-  }
-
-  // 실제 볼 차감(마스터볼 조커 포함)
-  const useBallsWithJoker = (cost: Partial<Record<BallType, number>>) => {
-    const discountedCost = getDiscountedCost(cost, bonusBalls)
-    let ballsCopy = { ...balls }
-    let masterball = ballsCopy.masterball || 0
-    let usedJoker = 0
-    let need: Partial<Record<BallType, number>> = {}
-    for (const type in discountedCost) {
-      if (type === 'masterball') continue
-      const required = discountedCost[type as BallType] || 0
-      const have = ballsCopy[type as BallType] || 0
-      if (have >= required) {
-        ballsCopy[type as BallType] -= required
-      } else {
-        const lack = required - have
-        if (masterball < lack) return false
-        ballsCopy[type as BallType] = 0
-        ballsCopy.masterball -= lack
-        masterball -= lack
-        usedJoker += lack
-        need[type as BallType] = lack
-      }
-    }
-    // masterball 자체 요구
-    if ((discountedCost.masterball || 0) > (ballsCopy.masterball || 0)) return false
-    ballsCopy.masterball -= (discountedCost.masterball || 0)
-    // 실제 적용
-    addBallsRaw(
-      Object.keys(ballsCopy).reduce((delta, t) => {
-        delta[t as BallType] = (ballsCopy[t as BallType] || 0) - (balls[t as BallType] || 0)
-        return delta
-      }, {} as Partial<Record<BallType, number>>)
-    )
-    return usedJoker
-  }
-
   const handleCapture = (card: PokemonCard) => {
-    // 마스터볼 조커 기능 적용
-    const { ok, usedJoker } = canCaptureWithJoker(card.requiredBalls, balls)
-    if (!ok) {
+    const discountedCost = getDiscountedCost(card.requiredBalls, bonusBalls)
+    let totalRequired = 0
+    let canAfford = true
+
+    Object.entries(discountedCost).forEach(([type, count]) => {
+      totalRequired += count
+      if (balls[type as BallType] < count) {
+        canAfford = false
+      }
+    })
+
+    if (!canAfford) {
       alert('볼이 부족합니다!')
       return
     }
-    if (usedJoker > 0) {
-      const confirmMsg =
-        `필요한 볼이 부족하여 마스터볼 ${usedJoker}개를 대신 사용합니다. 진행할까요?`
-      if (!window.confirm(confirmMsg)) return
-    }
-    const jokerUsed = useBallsWithJoker(card.requiredBalls)
-    if (jokerUsed === false) {
-      alert('볼이 부족합니다!')
-      return
-    }
+
     addCard(card)
+    const newBalls = { ...balls }
+    Object.entries(discountedCost).forEach(([type, count]) => {
+      newBalls[type as BallType] -= count
+    })
+    addBallsRaw(newBalls)
+
     if (reservedPokemon === card.name) setReservedPokemon(null)
-    alert(`${card.name} 포획 성공!${jokerUsed > 0 ? ` (마스터볼 ${jokerUsed}개를 다른 볼 대신 사용)` : ''}`)
+    alert(`${card.name} 포획 성공!`)
   }
 
-  // 예약 버튼 내부에서만 사용
   const handleReserve = (card: PokemonCard) => {
     if (reservedPokemon) {
       alert('이미 예약한 포켓몬이 있습니다.')
@@ -137,7 +88,6 @@ const GameBoard = () => {
     // 마스터볼 지급 시 10개 초과 체크
     const totalBalls = Object.values(balls).reduce((a, b) => a + (b || 0), 0)
     if (totalBalls >= 10) {
-      // 1개 초과, discard 모드 진입
       setReservedPokemon(card.name)
       addBalls({ masterball: 1 } as any)
       setDiscardMode(true)
@@ -152,12 +102,9 @@ const GameBoard = () => {
     decreaseActionPoints()
   }
 
-  // discard 관련 핸들러: ballUtils의 handleSelectDiscard를 래핑
+  // 버리기 관련 핸들러
   const handleSelectDiscardWrapper = (type: BallType) => handleSelectDiscard(type, balls, discardBalls, setDiscardBalls)
-
-  // 마스터볼 지급 시 10개 초과 체크
-  const discardedSum = () =>
-    Object.values(discardBalls).reduce((s, n) => s + (n || 0), 0)
+  const discardedSum = () => Object.values(discardBalls).reduce((s, n) => s + (n || 0), 0)
   const handleConfirmDiscard = () => {
     if (discardedSum() !== discardCount) return
     const negative: Partial<Record<BallType, number>> = {}
@@ -171,32 +118,35 @@ const GameBoard = () => {
   }
 
   return (
-    <div>
-      <PlayerPanel />
-      {/* discard 모드 UI */}
+    <div className="space-y-4">
+      {/* 카드 교체 버튼 */}
+      <div className="flex justify-end items-center mb-2">
+        <button
+          className="bg-orange-500 hover:bg-orange-600 text-white px-3 py-1 rounded text-xs"
+          onClick={handleResetBoard}
+          disabled={resetCount >= maxReset || actionPoints < 3}
+        >
+          카드 교체 (행동력 3 소모)
+        </button>
+      </div>
+
+      {/* 버리기 모드 UI */}
       {discardMode && (
         <div className="p-4 bg-yellow-50 border border-yellow-400 rounded mb-4">
-          <p className="mb-2 font-bold text-yellow-700">
-            볼이 10개를 초과했습니다. {discardCount}개를 버려주세요.
-          </p>
+          <p className="mb-2 font-bold text-yellow-700">볼이 10개를 초과했습니다. {discardCount}개를 버려주세요.</p>
           <div className="flex flex-wrap gap-2 mb-2">
             {Object.keys(balls).map((type) => (
               <button
                 key={type}
                 className="bg-red-400 hover:bg-red-600 text-white px-3 py-1 rounded text-xs"
-                disabled={
-                  (balls[type as BallType] || 0) - (discardBalls[type as BallType] || 0) <= 0 ||
-                  discardedSum() >= discardCount
-                }
+                disabled={(balls[type as BallType] || 0) - (discardBalls[type as BallType] || 0) <= 0 || discardedSum() >= discardCount}
                 onClick={() => handleSelectDiscardWrapper(type as BallType)}
               >
                 {type} -{discardBalls[type as BallType] || 0} / {balls[type as BallType] || 0}
               </button>
             ))}
           </div>
-          <p className="text-sm mb-2">
-            선택: {discardedSum()} / {discardCount}
-          </p>
+          <p className="text-sm mb-2">선택: {discardedSum()} / {discardCount}</p>
           <button
             className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded"
             disabled={discardedSum() !== discardCount}
@@ -206,133 +156,35 @@ const GameBoard = () => {
           </button>
         </div>
       )}
-      <div className="flex justify-between items-center mb-2">
-        <span className="text-sm text-gray-500">카드 교체: {resetCount} / {maxReset}</span>
-        <button
-          className="bg-orange-500 hover:bg-orange-600 text-white px-3 py-1 rounded text-xs"
-          onClick={handleResetBoard}
-          disabled={resetCount >= maxReset || actionPoints < 3}
-        >
-          카드 교체 (행동력 30 소모)
-        </button>
+
+      {/* 전설/환상/예약 카드 */}
+      <div className="grid grid-cols-3 gap-4 mb-4">
+        {board.legendary[0] && <PokemonCardComponent card={board.legendary[0]} {...{ actionPoints, reservedPokemon, onCapture, onReserve, ballImagePath, getDiscountedCost: getDiscountedCostWithBonus, bonusBgColor }} rarityLabel="전설" />}
+        {board.mythical[0] && <PokemonCardComponent card={board.mythical[0]} {...{ actionPoints, reservedPokemon, onCapture, onReserve, ballImagePath, getDiscountedCost: getDiscountedCostWithBonus, bonusBgColor }} rarityLabel="환상" />}
+        {reservedCard && <PokemonCardComponent card={reservedCard} {...{ actionPoints, reservedPokemon, onCapture, onReserve, ballImagePath, getDiscountedCost: getDiscountedCostWithBonus, bonusBgColor }} rarityLabel="예약" />}
       </div>
 
-      {/* 보드: 각 행에 특수카드(legendary, mythical, reserved) 포함 */}
-      <div className="space-y-4">
-        {/* Common + Legendary */}
-        <div>
-          <h3 className="font-bold mb-1 capitalize text-sm">common</h3>
-          <div className="flex flex-row gap-2 flex-wrap">
-            {board.common.map((card, idx) => (
-              <React.Fragment key={card.id}>
-                <div className="w-36 min-w-0">
-                  <PokemonCardComponent
-                    card={card}
-                    actionPoints={actionPoints}
-                    reservedPokemon={reservedPokemon}
-                    onCapture={handleCapture}
-                    onReserve={handleReserve}
-                    ballImagePath={ballImagePath}
-                    getDiscountedCost={getDiscountedCostWithBonus}
-                    bonusBgColor={bonusBgColor}
-                  />
-                </div>
-                {/* 4번째 뒤에 legendary */}
-                {idx === 3 && board.legendary[0] && (
-                  <div className="w-36 min-w-0" key={board.legendary[0].id}>
-                    <PokemonCardComponent
-                      card={board.legendary[0]}
-                      actionPoints={actionPoints}
-                      reservedPokemon={reservedPokemon}
-                      onCapture={handleCapture}
-                      onReserve={handleReserve}
-                      ballImagePath={ballImagePath}
-                      getDiscountedCost={getDiscountedCostWithBonus}
-                      bonusBgColor={bonusBgColor}
-                      rarityLabel="LEGENDARY"
-                    />
-                  </div>
-                )}
-              </React.Fragment>
+      {/* 일반/고급/희귀 카드 */}
+      {rarityOrder.map((rarity) => (
+        <div key={rarity}>
+          <h3 className="font-bold mb-2 text-lg">{rarityLabels[rarity]}</h3>
+          <div className="grid grid-cols-4 gap-4">
+            {board[rarity].map((card) => (
+              <PokemonCardComponent
+                key={card.id}
+                card={card}
+                actionPoints={actionPoints}
+                reservedPokemon={reservedPokemon}
+                onCapture={handleCapture}
+                onReserve={handleReserve}
+                ballImagePath={ballImagePath}
+                getDiscountedCost={getDiscountedCostWithBonus}
+                bonusBgColor={bonusBgColor}
+              />
             ))}
           </div>
         </div>
-        {/* Uncommon + Mythical */}
-        <div>
-          <h3 className="font-bold mb-1 capitalize text-sm">uncommon</h3>
-          <div className="flex flex-row gap-2 flex-wrap">
-            {board.uncommon.map((card, idx) => (
-              <React.Fragment key={card.id}>
-                <div className="w-36 min-w-0">
-                  <PokemonCardComponent
-                    card={card}
-                    actionPoints={actionPoints}
-                    reservedPokemon={reservedPokemon}
-                    onCapture={handleCapture}
-                    onReserve={handleReserve}
-                    ballImagePath={ballImagePath}
-                    getDiscountedCost={getDiscountedCostWithBonus}
-                    bonusBgColor={bonusBgColor}
-                  />
-                </div>
-                {/* 4번째 뒤에 mythical */}
-                {idx === 3 && board.mythical[0] && (
-                  <div className="w-36 min-w-0" key={board.mythical[0].id}>
-                    <PokemonCardComponent
-                      card={board.mythical[0]}
-                      actionPoints={actionPoints}
-                      reservedPokemon={reservedPokemon}
-                      onCapture={handleCapture}
-                      onReserve={handleReserve}
-                      ballImagePath={ballImagePath}
-                      getDiscountedCost={getDiscountedCostWithBonus}
-                      bonusBgColor={bonusBgColor}
-                      rarityLabel="MYTHICAL"
-                    />
-                  </div>
-                )}
-              </React.Fragment>
-            ))}
-          </div>
-        </div>
-        {/* Rare + Reserved */}
-        <div>
-          <h3 className="font-bold mb-1 capitalize text-sm">rare</h3>
-          <div className="flex flex-row gap-2 flex-wrap">
-            {board.rare.map((card, idx) => (
-              <React.Fragment key={card.id}>
-                <div className="w-36 min-w-0">
-                  <PokemonCardComponent
-                    card={card}
-                    actionPoints={actionPoints}
-                    reservedPokemon={reservedPokemon}
-                    onCapture={handleCapture}
-                    onReserve={handleReserve}
-                    ballImagePath={ballImagePath}
-                    getDiscountedCost={getDiscountedCostWithBonus}
-                    bonusBgColor={bonusBgColor}
-                  />
-                </div>
-                {/* 4번째 뒤에 reservedCard */}
-                {idx === 3 && reservedCard && (
-                  <div className="w-36 min-w-0" key={reservedCard.id}>
-                    <PokemonCardComponent
-                      card={reservedCard}
-                      actionPoints={actionPoints}
-                      reservedPokemon={reservedPokemon}
-                      onCapture={handleCapture}
-                      onReserve={handleReserve}
-                      ballImagePath={ballImagePath}
-                      getDiscountedCost={getDiscountedCostWithBonus}
-                      bonusBgColor={bonusBgColor}
-                    />
-                  </div>
-                )}
-              </React.Fragment>
-            ))}
-          </div>
-        </div>
-      </div>
+      ))}
     </div>
   )
 }

@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { dummyCards } from '../data/cards'
+import { pokemonDB } from '../data/pokemonDB'
 import type { BallType, PokemonCard } from '../data/cards'
 
 interface ResourceState {
@@ -20,12 +20,12 @@ interface ResourceState {
 
 export const useResourceState = create<ResourceState>((set, get) => ({
   balls: {
-    pokeball: 0,
-    superball: 0,
-    hyperball: 0,
-    healball: 0,
-    netball: 0,
-    masterball: 0,
+    pokeball: 7,
+    superball: 7,
+    hyperball: 7,
+    healball: 7,
+    netball: 7,
+    masterball: 3,
   },
   ownedCards: [],
   reservedCard: null,
@@ -48,10 +48,8 @@ export const useResourceState = create<ResourceState>((set, get) => ({
   addBalls: (ballsToAdd) => {
     const state = get()
     const updated = { ...state.balls }
-    const currentTotal =
-      Object.values(updated).reduce((sum, v) => sum + (v || 0), 0)
-    const addTotal =
-      Object.values(ballsToAdd).reduce((sum, v) => sum + (v || 0), 0)
+    const currentTotal = Object.values(updated).reduce((sum, v) => sum + (v || 0), 0)
+    const addTotal = Object.values(ballsToAdd).reduce((sum, v) => sum + (v || 0), 0)
     let allowedToAdd = Math.max(0, 10 - currentTotal)
     // 10개 초과해도 일단 추가(예약 시 discard 모드에서 처리)
     const result = { ...updated }
@@ -99,7 +97,7 @@ export const useResourceState = create<ResourceState>((set, get) => ({
     const owned = get().ownedCards
     return owned.filter((base) => {
       // 진화 가능한 카드가 존재하는지 확인
-      return dummyCards.some(
+      return pokemonDB.some(
         (c) => c.evolvesFrom === base.name && !owned.some((o) => o.name === c.name)
       )
     })
